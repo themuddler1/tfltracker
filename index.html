@@ -1,18 +1,3 @@
-Your TfL dashboard code can be updated to include Stanmore tube train departures.
-
-TfL's Unified API uses the exact same `/Arrivals` endpoint structure for London Underground stations as it does for bus stops. Stanmore Underground Station's NaPTAN ID is **`940GZZLUSTM`**.
-
-### Key Changes Made
-
-1. **Stanmore Tube Station Added:** Added `940GZZLUSTM|Stanmore Tube:Jubilee` to the default stop list (`EXAMPLE_STOPS`).
-2. **Tube Badge Styling:** Updated `.route-badge` CSS so longer line names (like **Jubilee**) fit cleanly inside the badges, and added authentic TfL line colors (e.g., Jubilee silver/grey `#868f98`).
-3. **Platform Formatting:** Refined platform display formatting so Underground platform names (e.g., `Eastbound - Platform 1`) render cleanly without prepending "Plat".
-
-### Complete Updated `index.html`
-
-Replace the contents of your `index.html` on GitHub with this code:
-
-```html
 <!DOCTYPE html>
 <html lang="en-GB" data-theme="dark">
 <head>
