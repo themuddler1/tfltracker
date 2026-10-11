@@ -369,7 +369,7 @@ const PLACEHOLDER = "__TFL_DEFAULT_STOPS__";
 var DEFAULT_STOPS = PLACEHOLDER;
 
 /* Included Stanmore Tube (940GZZLUSTM) alongside bus stops */
-const EXAMPLE_STOPS = "210021008600|St Peters:142;210021007885|Windmill Lane:142,258;490000219A|Stanmore Bus:142;940GZZLUSTM|Stanmore Tube:Jubilee;210021902080|Watford Water Lane R:142,258;";
+const EXAMPLE_STOPS = "210021008600|St Peters to Stanmore:142;210021007885|Windmill Lane to Watford:142,258;490000219A|Stanmore to Bushey:142;940GZZLUSTM|Stanmore Tube:Jubilee;210021902080|Watford Water Lane to Bushey:142,258;";
 
 function stopsFromString(s) {
   return String(s || "").split(";").filter(Boolean).map(parseStopEntry).filter((x) => x.naptanId);
