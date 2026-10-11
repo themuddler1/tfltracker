@@ -483,9 +483,11 @@ async function fetchArrivals(stop) {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
   const allowed = stop.routes.map((r) => r.toUpperCase());
-  return (data || [])
+  
+  const rawList = (data || [])
     .filter((a) => !allowed.length || allowed.includes(String(a.lineName || "").toUpperCase()))
     .map((a) => ({
+      id: cleanStr(a.id),
       lineName: cleanStr(a.lineName),
       destinationName: cleanStr(a.destinationName) || cleanStr(a.towards),
       towards: cleanStr(a.towards),
@@ -496,6 +498,26 @@ async function fetchArrivals(stop) {
       arrivalMs: parseArrivalMs(a.expectedArrival),
     }))
     .sort((a, b) => a.arrivalMs - b.arrivalMs);
+
+  // Deduplicate multi-platform train predictions by unique Vehicle ID
+  const deduplicated = [];
+  const seenVehicles = new Set();
+  const seenIds = new Set();
+
+  for (const item of rawList) {
+    if (item.id && seenIds.has(item.id)) continue;
+    if (item.id) seenIds.add(item.id);
+
+    if (item.vehicleId) {
+      const vKey = `${item.lineName}_${item.vehicleId}`;
+      if (seenVehicles.has(vKey)) continue;
+      seenVehicles.add(vKey);
+    }
+
+    deduplicated.push(item);
+  }
+
+  return deduplicated;
 }
 
 function cleanStr(v) {
