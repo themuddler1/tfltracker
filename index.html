@@ -1,9 +1,24 @@
+Your TfL dashboard code can be updated to include Stanmore tube train departures.
+
+TfL's Unified API uses the exact same `/Arrivals` endpoint structure for London Underground stations as it does for bus stops. Stanmore Underground Station's NaPTAN ID is **`940GZZLUSTM`**.
+
+### Key Changes Made
+
+1. **Stanmore Tube Station Added:** Added `940GZZLUSTM|Stanmore Tube:Jubilee` to the default stop list (`EXAMPLE_STOPS`).
+2. **Tube Badge Styling:** Updated `.route-badge` CSS so longer line names (like **Jubilee**) fit cleanly inside the badges, and added authentic TfL line colors (e.g., Jubilee silver/grey `#868f98`).
+3. **Platform Formatting:** Refined platform display formatting so Underground platform names (e.g., `Eastbound - Platform 1`) render cleanly without prepending "Plat".
+
+### Complete Updated `index.html`
+
+Replace the contents of your `index.html` on GitHub with this code:
+
+```html
 <!DOCTYPE html>
 <html lang="en-GB" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Live Bus Arrivals — TfL Dashboard</title>
+<title>Live Bus & Tube Arrivals — TfL Dashboard</title>
 <style>
 /* ── Design tokens ─────────────────────────────────────────── */
 :root,
@@ -177,13 +192,25 @@ a { color: var(--color-accent); }
   padding: 12px 16px; border-bottom: 1px solid var(--color-divider);
 }
 .arrival:last-child { border-bottom: none; }
+
+/* Route Badge & Tube Line Colors */
 .route-badge {
-  font-family: var(--font-mono); font-weight: 700; font-size: 17px;
+  font-family: var(--font-mono); font-weight: 700; font-size: 14px;
   color: #fff; background: var(--color-primary);
-  min-width: 40px; height: 32px; padding: 0 8px;
+  min-width: 44px; height: 32px; padding: 0 8px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 8px; letter-spacing: -0.02em;
+  border-radius: 8px; letter-spacing: -0.02em; text-transform: uppercase;
+  white-space: nowrap;
 }
+.route-badge[data-line="Jubilee"] { background: #868f98; color: #ffffff; }
+.route-badge[data-line="Metropolitan"] { background: #9b0056; color: #ffffff; }
+.route-badge[data-line="Northern"] { background: #000000; color: #ffffff; }
+.route-badge[data-line="Bakerloo"] { background: #b16338; color: #ffffff; }
+.route-badge[data-line="Piccadilly"] { background: #0019a8; color: #ffffff; }
+.route-badge[data-line="Central"] { background: #e1251b; color: #ffffff; }
+.route-badge[data-line="Victoria"] { background: #0098d4; color: #ffffff; }
+.route-badge[data-line="District"] { background: #00782a; color: #ffffff; }
+
 .arrival-info { min-width: 0; }
 .arrival-dest { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .arrival-sub { font-size: 12.5px; color: var(--color-text-muted); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -246,7 +273,7 @@ a { color: var(--color-accent); }
         <circle cx="22" cy="25.5" r="3.2" fill="currentColor"/>
       </svg>
       <div class="brand-text">
-        <span class="brand-title">Live Bus Arrivals</span>
+        <span class="brand-title">Live Bus & Tube Arrivals</span>
         <span class="brand-sub">TfL Unified API · London</span>
       </div>
     </div>
@@ -264,7 +291,7 @@ a { color: var(--color-accent); }
     <div class="help-inner">
       <p><strong>Configure stops here — no URL needed.</strong> Type your stops into the “Stops” box above and click <em>Load stops</em>. This works on Android (where <code>content://</code> blocks URL query strings and <code>file://</code>). Use <em>Save as file</em> to download a personalised copy with your stops baked in, then open that file any time.</p>
       <p><strong>URL parameters</strong> (desktop browsers only): pass stops and route filters in the address bar:</p>
-      <p><code>bus-dashboard.html?stops=490000077C|Euston:390,91;490000049S|Kings+Cross:46,214;490G00000351|Marylebone</code></p>
+      <p><code>index.html?stops=490000219A|Stanmore+Bus:142;940GZZLUSTM|Stanmore+Tube:Jubilee</code></p>
       <p>Format per stop: <code>NaptanId[|Label[:route,route]]</code> — the stop ID comes first, an optional label after <code>|</code>, and an optional route list after <code>:</code>. Separate stops with <code>;</code>. Omit routes to show all. Use <code>+</code> or <code>%20</code> for spaces in labels. Optional: <code>&amp;key=YOUR_APP_KEY</code> (500 req/min) and <code>&amp;interval=30</code> (refresh seconds).</p>
       <p><strong>Higher rate limits (optional):</strong> Anonymous access is capped at 50 requests/min, which is plenty for personal use. For continuous multi-stop monitoring, register at the <a href="https://api-portal.tfl.gov.uk/signup" target="_blank" rel="noopener">TfL API Portal</a>, subscribe to the free <em>500 Requests per min</em> product, copy your Primary key from the Profile page, and add <code>&amp;key=...</code> to the URL (or paste it below).</p>
     </div>
@@ -274,8 +301,8 @@ a { color: var(--color-accent); }
 <main class="main">
   <section class="page-head">
     <div>
-      <h1 class="page-title">Bus Stop Arrivals</h1>
-      <p class="page-sub" id="page-sub">Auto-refreshing every 30 seconds · predicted arrival times and vehicle IDs.</p>
+      <h1 class="page-title">Live Arrivals</h1>
+      <p class="page-sub" id="page-sub">Auto-refreshing every 30 seconds · predicted arrival times for bus and tube services.</p>
     </div>
     <div class="countdown-wrap" title="Seconds until next live refresh">
       <span class="countdown-label">Next refresh</span>
@@ -329,16 +356,12 @@ function parseStopsFromURL() {
 }
 
 function parseStopEntry(raw) {
-  // Format: NaptanId  |  NaptanId:routes  |  NaptanId|Label  |  NaptanId|Label:routes
-  // Stop ID always comes first; an optional label follows after '|';
-  // an optional route list follows after ':'. A '+' is treated as a space
-  // (so labels typed in the in-page box match the URL format).
   let entry = raw.trim().replace(/\+/g, " ");
   let naptanId = entry, label = "", routes = [];
   const bar = entry.indexOf("|");
   if (bar !== -1) {
     naptanId = entry.slice(0, bar).trim();
-    const rest = entry.slice(bar + 1).trim();        // "Label" or "Label:routes"
+    const rest = entry.slice(bar + 1).trim();
     const colon = rest.indexOf(":");
     if (colon !== -1) {
       label = rest.slice(0, colon).trim();
@@ -357,16 +380,11 @@ function parseStopEntry(raw) {
 }
 
 /* ── Stop resolution (URL → baked defaults → localStorage → none) ─── */
-// DEFAULT_STOPS is rewritten by “Save as file” so a personalised copy
-// reopens with your stops already loaded — works around Android’s
-// content:// blocking of file:// query strings.
 const PLACEHOLDER = "__TFL_DEFAULT_STOPS__";
 var DEFAULT_STOPS = PLACEHOLDER;
 
-// Shown out-of-the-box on a fresh open (before you add your own stops),
-// so the dashboard is live immediately and the “Stops” box has a working
-// example to edit.
-const EXAMPLE_STOPS = "210021008600|St Peters:142;210021007885|Windmill Lane:142,258;490000219A|Stanmore:142;210021902080|Watford Water Lane R:142,258;";
+/* Included Stanmore Tube (940GZZLUSTM) alongside bus stops */
+const EXAMPLE_STOPS = "210021008600|St Peters:142;210021007885|Windmill Lane:142,258;490000219A|Stanmore Bus:142;940GZZLUSTM|Stanmore Tube:Jubilee;210021902080|Watford Water Lane R:142,258;";
 
 function stopsFromString(s) {
   return String(s || "").split(";").filter(Boolean).map(parseStopEntry).filter((x) => x.naptanId);
@@ -383,33 +401,32 @@ function serializeStops(stops) {
 
 function resolveStops() {
   const urlStops = parseStopsFromURL();
-  if (urlStops.length) return urlStops;            // desktop: ?stops=...
+  if (urlStops.length) return urlStops;
   if (DEFAULT_STOPS && DEFAULT_STOPS !== PLACEHOLDER) {
-    const ds = stopsFromString(DEFAULT_STOPS);     // personalised saved file
+    const ds = stopsFromString(DEFAULT_STOPS);
     if (ds.length) return ds;
   }
-  try {                                            // best-effort persistence
+  try {
     const saved = localStorage.getItem("tfl_stops");
     if (saved) { const ss = stopsFromString(saved); if (ss.length) return ss; }
   } catch (e) {}
-  return stopsFromString(EXAMPLE_STOPS);           // fresh open: working demo
+  return stopsFromString(EXAMPLE_STOPS);
 }
 
 const state = {
   stops: resolveStops(),
   appKey: (new URLSearchParams(location.search).get("key") || "").trim(),
   intervalSec: parseInt(new URLSearchParams(location.search).get("interval") || "30", 10) || 30,
-  cache: new Map(),      // naptanId -> { arrivals: [...], error: "", fetchedAt: ms }
+  cache: new Map(),
   lastUpdated: "",
   ok: true,
 };
 
-/* persist app key if localStorage is available (best-effort) */
 try {
   const saved = localStorage.getItem("tfl_app_key");
   if (!state.appKey && saved) state.appKey = saved;
   if (state.appKey) localStorage.setItem("tfl_app_key", state.appKey);
-} catch (e) { /* localStorage blocked (file://) — ignore */ }
+} catch (e) {}
 
 /* ── DOM refs ──────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
@@ -452,9 +469,9 @@ $("apply-settings").addEventListener("click", () => {
   state.appKey = apiKeyInput.value.trim();
   state.intervalSec = Math.max(10, Math.min(600, parseInt(intervalInput.value, 10) || 30));
   try { localStorage.setItem("tfl_app_key", state.appKey); } catch (e) {}
-  pageSub.textContent = `Auto-refreshing every ${state.intervalSec} seconds · predicted arrival times and vehicle IDs.`;
+  pageSub.textContent = `Auto-refreshing every ${state.intervalSec} seconds · predicted arrival times for bus and tube services.`;
   settingsHint.textContent = state.appKey ? "Key saved — using 500 req/min tier." : "Anonymous mode — 50 req/min.";
-  scheduleNextRefresh(0); // restart cycle immediately
+  scheduleNextRefresh(0);
 });
 
 /* ── TfL fetch ─────────────────────────────────────────────── */
@@ -514,7 +531,7 @@ function stopCardShell(stop) {
 
 function renderAll() {
   if (!state.stops.length) {
-    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">No stops configured. Add stops via the URL, e.g.<br><code style="font-family:var(--font-mono);font-size:12px">?stops=490000019C:10,59;490000022F</code><br>See “Help / API key” for the full format.</div>`;
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">No stops configured. Add stops via the configuration box above.</div>`;
     return;
   }
   grid.innerHTML = state.stops.map((stop) => {
@@ -525,7 +542,7 @@ function renderAll() {
     } else if (c.error) {
       body = `<div class="error">${escapeHtml(c.error)}</div>`;
     } else if (!c.arrivals.length) {
-      body = `<div class="empty">No buses arriving soon${stop.routes.length ? " on the filtered routes" : ""}.</div>`;
+      body = `<div class="empty">No services arriving soon${stop.routes.length ? " on the filtered routes" : ""}.</div>`;
     } else {
       body = `<ul class="arrivals">${c.arrivals.map(renderArrival).join("")}</ul>`;
     }
@@ -553,11 +570,11 @@ function renderArrival(a) {
   const dest = a.destinationName || a.towards || "—";
   const sub = [
     a.vehicleId ? `<span class="vid">Veh ${escapeHtml(a.vehicleId)}</span>` : "",
-    a.platformName ? `<span class="plate">Plat ${escapeHtml(a.platformName)}</span>` : "",
+    a.platformName ? `<span class="plate">${escapeHtml(a.platformName)}</span>` : "",
     a.towards && a.towards !== dest ? `<span class="plate">via ${escapeHtml(a.towards)}</span>` : "",
   ].filter(Boolean).join("");
   return `<li class="arrival">
-    <span class="route-badge">${escapeHtml(a.lineName || "—")}</span>
+    <span class="route-badge" data-line="${escapeHtml(a.lineName)}">${escapeHtml(a.lineName || "—")}</span>
     <span class="arrival-info">
       <span class="arrival-dest">${escapeHtml(dest)}</span>
       <span class="arrival-sub">${sub || '<span class="plate">—</span>'}</span>
@@ -605,7 +622,6 @@ async function refreshOnce() {
     } else {
       const msg = String(r.reason && r.reason.message || r.reason || "Request failed");
       const prev = state.cache.get(stop.naptanId);
-      // keep previous data if we have it; surface error otherwise
       state.cache.set(stop.naptanId, { arrivals: prev ? prev.arrivals : [], error: prev ? "" : "Unable to load — " + msg, fetchedAt: Date.now() });
     }
   });
@@ -619,9 +635,7 @@ function scheduleNextRefresh(delaySec) {
   nextRefreshAt = Date.now() + delaySec * 1000;
 }
 
-/* 1s ticker: re-render (live countdown) + drive refresh schedule */
 function tick() {
-  // re-render arrivals so minutes count down smoothly
   if (state.cache.size) renderAll();
   const remain = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
   countdownEl.textContent = remain + "s";
@@ -635,7 +649,6 @@ $("refresh-now").addEventListener("click", () => {
   refreshOnce().finally(() => scheduleNextRefresh(state.intervalSec));
 });
 
-// Stops editor (works without URL params — for Android content:// opens)
 const stopsInput = $("stops-input");
 const stopsHint = $("stops-hint");
 stopsInput.value = serializeStops(state.stops);
@@ -660,12 +673,10 @@ function loadStopsFromInput() {
 $("load-stops").addEventListener("click", loadStopsFromInput);
 stopsInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); loadStopsFromInput(); } });
 
-// Save a personalised copy with the stops baked in (reopens with them loaded)
 $("save-file").addEventListener("click", () => {
   const stopsStr = stopsInput.value.trim().replace(/\+/g, " ");
-  const jsonLit = JSON.stringify(stopsStr).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");  // quoted + escaped + script-safe
+  const jsonLit = JSON.stringify(stopsStr).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
   let html = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
-  // Replace the DEFAULT_STOPS assignment (unique token) with the baked value.
   html = html.replace("DEFAULT_STOPS = PLACEHOLDER", "DEFAULT_STOPS = " + jsonLit);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const a = document.createElement("a");
@@ -691,3 +702,5 @@ if (!state.stops.length) {
 </script>
 </body>
 </html>
+
+```
