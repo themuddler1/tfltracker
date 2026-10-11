@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en-GB" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live Bus Arrivals — TfL Dashboard</title>
+<style>
+/* ── Design tokens ─────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --color-bg: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfaf8;
+  --color-surface-offset: #f0eee9;
+  --color-border: #e2ded6;
+  --color-divider: #ece9e3;
+  --color-text: #1f1d17;
+  --color-text-muted: #6b6963;
+  --color-text-faint: #a3a19b;
+  --color-primary: #d4081c;        /* TfL bus red */
+  --color-primary-hover: #a30616;
+  --color-primary-soft: #fbe6e8;
+  --color-accent: #0b3d91;          /* TfL roundel blue */
+  --color-success: #1f6f3a;
+  --color-warning: #9a5400;
+  --shadow-sm: 0 1px 2px rgba(20,12,0,.06);
+  --shadow-md: 0 6px 18px rgba(20,12,0,.09);
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+}
+[data-theme="dark"] {
+  --color-bg: #14130f;
+  --color-surface: #1c1b18;
+  --color-surface-2: #22211d;
+  --color-surface-offset: #1e1d1a;
+  --color-border: #34322c;
+  --color-divider: #2a2825;
+  --color-text: #e7e5df;
+  --color-text-muted: #9a988f;
+  --color-text-faint: #645f58;
+  --color-primary: #ff3b46;
+  --color-primary-hover: #ff6b73;
+  --color-primary-soft: #2c1719;
+  --color-accent: #6ea4ff;
+  --color-success: #5ec46f;
+  --color-warning: #e0a13a;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md: 0 8px 24px rgba(0,0,0,.45);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) { color-scheme: dark; }
+}
+
+/* ── Base ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; scroll-behavior: smooth; }
+body {
+  min-height: 100dvh; line-height: 1.55;
+  font-family: var(--font-body); font-size: 16px;
+  color: var(--color-text); background-color: var(--color-bg);
+}
+button { cursor: pointer; background: none; border: none; color: inherit; font: inherit; }
+a { color: var(--color-accent); }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+/* ── Top bar ──────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+}
+.topbar-inner {
+  max-width: 1280px; margin: 0 auto; padding: 12px 20px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+.brand-mark { width: 30px; height: 30px; color: var(--color-primary); flex: none; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+.brand-title { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.brand-sub { font-size: 12px; color: var(--color-text-muted); }
+.status-cluster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12.5px; font-weight: 600;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--color-border); background: var(--color-surface);
+}
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-faint); }
+.badge[data-state="live"] { color: var(--color-success); border-color: color-mix(in oklab, var(--color-success) 40%, transparent); }
+.badge[data-state="live"] .dot { background: var(--color-success); box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 60%, transparent); animation: pulse 2s infinite; }
+.badge[data-state="error"] { color: var(--color-primary); border-color: color-mix(in oklab, var(--color-primary) 45%, transparent); }
+.badge[data-state="error"] .dot { background: var(--color-primary); }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--color-success) 55%,transparent)} 70%{box-shadow:0 0 0 7px transparent} 100%{box-shadow:0 0 0 0 transparent} }
+.meta { font-size: 12.5px; color: var(--color-text-muted); }
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; padding: 7px 12px;
+  border-radius: var(--radius-sm); border: 1px solid var(--color-border);
+  background: var(--color-surface); transition: background .15s, border-color .15s;
+}
+.btn-ghost:hover { background: var(--color-surface-offset); border-color: var(--color-text-faint); }
+
+/* ── Main ─────────────────────────────────────────────────── */
+.main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+.page-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.page-sub { font-size: 14px; color: var(--color-text-muted); margin-top: 4px; }
+.countdown-wrap { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.countdown-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-faint); }
+.countdown { font-family: var(--font-mono); font-weight: 700; font-size: 26px; color: var(--color-accent); }
+
+/* settings bar */
+.settings {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 14px; margin-bottom: 22px;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+.settings label { font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
+.settings input[type="text"], .settings input[type="number"] {
+  font: inherit; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--color-border); background: var(--color-surface-2);
+  color: var(--color-text); min-width: 0;
+}
+.settings input[type="text"] { flex: 1; max-width: 320px; }
+.settings .sep { width: 1px; height: 22px; background: var(--color-divider); }
+.settings .hint { font-size: 12px; color: var(--color-text-faint); }
+
+/* configuration (stops editor) */
+.config {
+  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+  padding: 12px 14px; margin-bottom: 22px;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+.config label { font-size: 13px; font-weight: 600; color: var(--color-text-muted); padding-top: 7px; }
+.config textarea {
+  font: inherit; font-family: var(--font-mono); font-size: 13px;
+  padding: 8px 10px; border-radius: 8px; resize: vertical; min-height: 38px;
+  border: 1px solid var(--color-border); background: var(--color-surface-2);
+  color: var(--color-text); flex: 1; min-width: 200px; width: 100%;
+}
+.config-heading {
+  font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+  margin: 14px 0 4px; padding-top: 18px; border-top: 1px solid var(--color-divider);
+  color: var(--color-text-muted);
+}
+.btn-primary {
+  font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--color-primary); background: var(--color-primary);
+  color: #fff; transition: background .15s;
+}
+.btn-primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+
+/* ── Stops grid ──────────────────────────────────────────── */
+.stops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.stop-card {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column;
+}
+.stop-head { padding: 14px 16px; border-bottom: 1px solid var(--color-divider); background: var(--color-surface-2); }
+.stop-label { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.stop-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.stop-id { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-muted); }
+.route-chip {
+  font-size: 11px; font-weight: 600; color: var(--color-primary);
+  background: var(--color-primary-soft); padding: 2px 8px; border-radius: 999px;
+}
+.route-chip.all { color: var(--color-text-muted); background: var(--color-surface-offset); }
+.arrivals { list-style: none; flex: 1; }
+.arrival {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--color-divider);
+}
+.arrival:last-child { border-bottom: none; }
+.route-badge {
+  font-family: var(--font-mono); font-weight: 700; font-size: 17px;
+  color: #fff; background: var(--color-primary);
+  min-width: 40px; height: 32px; padding: 0 8px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; letter-spacing: -0.02em;
+}
+.arrival-info { min-width: 0; }
+.arrival-dest { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arrival-sub { font-size: 12.5px; color: var(--color-text-muted); margin-top: 1px; display: flex; gap: 8px; flex-wrap: wrap; }
+.arrival-sub .vid { font-family: var(--font-mono); }
+.arrival-sub .plate { color: var(--color-text-faint); }
+.arrival-time { text-align: right; flex: none; }
+.min { font-family: var(--font-mono); font-weight: 700; font-size: 22px; line-height: 1; }
+.min .unit { font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-left: 1px; }
+.due { color: var(--color-primary); }
+.clock { font-size: 11.5px; color: var(--color-text-faint); font-family: var(--font-mono); margin-top: 2px; }
+
+/* states */
+.empty, .error, .loading {
+  padding: 30px 16px; text-align: center; color: var(--color-text-muted); font-size: 14px;
+}
+.error { color: var(--color-primary); }
+.spinner {
+  width: 22px; height: 22px; margin: 0 auto 8px;
+  border: 2.5px solid var(--color-divider); border-top-color: var(--color-accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+.skeleton-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.skel-block { background: var(--color-surface-offset); border-radius: 6px; height: 14px; }
+.skel-badge { width: 40px; height: 32px; border-radius: 8px; background: var(--color-surface-offset); }
+.skel-min { width: 38px; height: 22px; border-radius: 6px; background: var(--color-surface-offset); }
+.footer-note { margin-top: 28px; font-size: 12px; color: var(--color-text-faint); text-align: center; }
+.footer-note a { color: var(--color-text-muted); }
+
+/* help panel */
+.help-toggle { margin-left: auto; }
+.help-panel {
+  max-height: 0; overflow: hidden; transition: max-height .3s ease;
+  border-top: 1px solid var(--color-border); background: var(--color-surface-offset);
+}
+.help-panel.open { max-height: 600px; }
+.help-inner { max-width: 1280px; margin: 0 auto; padding: 16px 20px; font-size: 13px; color: var(--color-text-muted); line-height: 1.7; }
+.help-inner code { font-family: var(--font-mono); font-size: 12px; background: var(--color-surface); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--color-border); color: var(--color-text); word-break: break-all; }
+.help-inner strong { color: var(--color-text); }
+.help-inner ol { margin: 6px 0 6px 18px; }
+.help-inner p { margin: 8px 0; }
+
+@media (max-width: 560px) {
+  .page-title { font-size: 22px; }
+  .main { padding: 18px 14px 48px; }
+  .topbar-inner { padding: 10px 14px; }
+  .countdown { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="3" y="6" width="26" height="17" rx="3" fill="currentColor"/>
+        <rect x="5.5" y="9" width="21" height="6" rx="1" fill="var(--color-surface)"/>
+        <circle cx="10" cy="25.5" r="3.2" fill="currentColor"/>
+        <circle cx="22" cy="25.5" r="3.2" fill="currentColor"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-title">Live Bus Arrivals</span>
+        <span class="brand-sub">TfL Unified API · London</span>
+      </div>
+    </div>
+    <div class="status-cluster">
+      <span id="status-badge" class="badge" data-state="loading"><span class="dot"></span><span class="badge-label">Connecting…</span></span>
+      <span class="meta">Updated <time id="last-updated">—</time></span>
+      <button id="refresh-now" class="btn-ghost" type="button">Refresh now</button>
+      <button id="help-toggle" class="btn-ghost help-toggle" type="button">Help / API key</button>
+      <button class="btn-ghost theme-toggle" data-theme-toggle type="button" aria-label="Toggle theme" title="Toggle theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="help-panel" class="help-panel" aria-hidden="true">
+    <div class="help-inner">
+      <p><strong>Configure stops here — no URL needed.</strong> Type your stops into the “Stops” box above and click <em>Load stops</em>. This works on Android (where <code>content://</code> blocks URL query strings and <code>file://</code>). Use <em>Save as file</em> to download a personalised copy with your stops baked in, then open that file any time.</p>
+      <p><strong>URL parameters</strong> (desktop browsers only): pass stops and route filters in the address bar:</p>
+      <p><code>bus-dashboard.html?stops=490000077C|Euston:390,91;490000049S|Kings+Cross:46,214;490G00000351|Marylebone</code></p>
+      <p>Format per stop: <code>NaptanId[|Label[:route,route]]</code> — the stop ID comes first, an optional label after <code>|</code>, and an optional route list after <code>:</code>. Separate stops with <code>;</code>. Omit routes to show all. Use <code>+</code> or <code>%20</code> for spaces in labels. Optional: <code>&amp;key=YOUR_APP_KEY</code> (500 req/min) and <code>&amp;interval=30</code> (refresh seconds).</p>
+      <p><strong>Higher rate limits (optional):</strong> Anonymous access is capped at 50 requests/min, which is plenty for personal use. For continuous multi-stop monitoring, register at the <a href="https://api-portal.tfl.gov.uk/signup" target="_blank" rel="noopener">TfL API Portal</a>, subscribe to the free <em>500 Requests per min</em> product, copy your Primary key from the Profile page, and add <code>&amp;key=...</code> to the URL (or paste it below).</p>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <section class="page-head">
+    <div>
+      <h1 class="page-title">Bus Stop Arrivals</h1>
+      <p class="page-sub" id="page-sub">Auto-refreshing every 30 seconds · predicted arrival times and vehicle IDs.</p>
+    </div>
+    <div class="countdown-wrap" title="Seconds until next live refresh">
+      <span class="countdown-label">Next refresh</span>
+      <span class="countdown" id="countdown">—</span>
+    </div>
+  </section>
+
+  <div id="stops-grid" class="stops-grid" aria-live="polite"></div>
+
+  <p class="footer-note">Data from the <a href="https://api.tfl.gov.uk" target="_blank" rel="noopener">Transport for London Unified API</a>. Predictions are indicative.</p>
+
+  <h2 class="config-heading">Configuration</h2>
+  <section class="config" aria-label="Stop configuration">
+    <label for="stops-input">Stops</label>
+    <textarea id="stops-input" rows="2" placeholder="NaptanId|Label:routes" spellcheck="false" autocomplete="off"></textarea>
+    <button id="load-stops" class="btn-primary" type="button">Load stops</button>
+    <button id="save-file" class="btn-ghost" type="button">Save as file</button>
+    <span class="hint" id="stops-hint"></span>
+  </section>
+
+  <section class="settings" aria-label="Dashboard settings">
+    <label for="api-key">TfL app_key</label>
+    <input id="api-key" type="text" placeholder="optional — paste key for 500 req/min" autocomplete="off" spellcheck="false" />
+    <span class="sep"></span>
+    <label for="interval">Refresh (s)</label>
+    <input id="interval" type="number" min="10" max="600" value="30" style="width:78px" />
+    <button id="apply-settings" class="btn-ghost" type="button">Apply</button>
+    <span class="hint" id="settings-hint"></span>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ── Config from URL ──────────────────────────────────────── */
+const TFL_BASE = "https://api.tfl.gov.uk";
+
+function parseStopsFromURL() {
+  const params = new URLSearchParams(location.search);
+  const entries = [];
+  if (params.has("stops")) {
+    entries.push(...params.get("stops").split(";").filter(Boolean));
+  } else if (params.has("stop")) {
+    const id = params.get("stop").trim();
+    const routes = params.has("routes") ? params.get("routes") : "";
+    entries.push(id + (routes ? ":" + routes : ""));
+  } else {
+    return []; // nothing configured
+  }
+  return entries.map(parseStopEntry).filter((s) => s.naptanId);
+}
+
+function parseStopEntry(raw) {
+  // Format: NaptanId  |  NaptanId:routes  |  NaptanId|Label  |  NaptanId|Label:routes
+  // Stop ID always comes first; an optional label follows after '|';
+  // an optional route list follows after ':'. A '+' is treated as a space
+  // (so labels typed in the in-page box match the URL format).
+  let entry = raw.trim().replace(/\+/g, " ");
+  let naptanId = entry, label = "", routes = [];
+  const bar = entry.indexOf("|");
+  if (bar !== -1) {
+    naptanId = entry.slice(0, bar).trim();
+    const rest = entry.slice(bar + 1).trim();        // "Label" or "Label:routes"
+    const colon = rest.indexOf(":");
+    if (colon !== -1) {
+      label = rest.slice(0, colon).trim();
+      routes = rest.slice(colon + 1).split(",").map((r) => r.trim()).filter(Boolean);
+    } else {
+      label = rest;
+    }
+  } else {
+    const colon = entry.indexOf(":");
+    if (colon !== -1) {
+      naptanId = entry.slice(0, colon).trim();
+      routes = entry.slice(colon + 1).split(",").map((r) => r.trim()).filter(Boolean);
+    }
+  }
+  return { naptanId, label: label || naptanId, routes };
+}
+
+/* ── Stop resolution (URL → baked defaults → localStorage → none) ─── */
+// DEFAULT_STOPS is rewritten by “Save as file” so a personalised copy
+// reopens with your stops already loaded — works around Android’s
+// content:// blocking of file:// query strings.
+const PLACEHOLDER = "__TFL_DEFAULT_STOPS__";
+var DEFAULT_STOPS = PLACEHOLDER;
+
+// Shown out-of-the-box on a fresh open (before you add your own stops),
+// so the dashboard is live immediately and the “Stops” box has a working
+// example to edit.
+const EXAMPLE_STOPS = "210021008600|St Peters:142;210021007885|Windmill Lane:142,258;490000219A|Stanmore:142;210021902080|Watford Water Lane R:142,258;";
+
+function stopsFromString(s) {
+  return String(s || "").split(";").filter(Boolean).map(parseStopEntry).filter((x) => x.naptanId);
+}
+
+function serializeStops(stops) {
+  return stops.map((s) => {
+    let e = s.naptanId;
+    if (s.label && s.label !== s.naptanId) e += "|" + s.label;
+    if (s.routes.length) e += ":" + s.routes.join(",");
+    return e;
+  }).join(";");
+}
+
+function resolveStops() {
+  const urlStops = parseStopsFromURL();
+  if (urlStops.length) return urlStops;            // desktop: ?stops=...
+  if (DEFAULT_STOPS && DEFAULT_STOPS !== PLACEHOLDER) {
+    const ds = stopsFromString(DEFAULT_STOPS);     // personalised saved file
+    if (ds.length) return ds;
+  }
+  try {                                            // best-effort persistence
+    const saved = localStorage.getItem("tfl_stops");
+    if (saved) { const ss = stopsFromString(saved); if (ss.length) return ss; }
+  } catch (e) {}
+  return stopsFromString(EXAMPLE_STOPS);           // fresh open: working demo
+}
+
+const state = {
+  stops: resolveStops(),
+  appKey: (new URLSearchParams(location.search).get("key") || "").trim(),
+  intervalSec: parseInt(new URLSearchParams(location.search).get("interval") || "30", 10) || 30,
+  cache: new Map(),      // naptanId -> { arrivals: [...], error: "", fetchedAt: ms }
+  lastUpdated: "",
+  ok: true,
+};
+
+/* persist app key if localStorage is available (best-effort) */
+try {
+  const saved = localStorage.getItem("tfl_app_key");
+  if (!state.appKey && saved) state.appKey = saved;
+  if (state.appKey) localStorage.setItem("tfl_app_key", state.appKey);
+} catch (e) { /* localStorage blocked (file://) — ignore */ }
+
+/* ── DOM refs ──────────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+const grid = $("stops-grid");
+const statusBadge = $("status-badge");
+const lastUpdatedEl = $("last-updated");
+const countdownEl = $("countdown");
+const pageSub = $("page-sub");
+
+/* ── Theme toggle ──────────────────────────────────────────── */
+(function () {
+  const t = document.querySelector("[data-theme-toggle]");
+  const r = document.documentElement;
+  let d = matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light";
+  r.setAttribute("data-theme", d);
+  function syncIcon() {
+    t.innerHTML = d === "dark"
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+    t.setAttribute("aria-label", "Switch to " + (d === "dark" ? "light" : "dark") + " mode");
+  }
+  syncIcon();
+  t.addEventListener("click", () => { d = d === "dark" ? "light" : "dark"; r.setAttribute("data-theme", d); syncIcon(); });
+})();
+
+/* ── Help panel ────────────────────────────────────────────── */
+$("help-toggle").addEventListener("click", () => {
+  const p = $("help-panel");
+  p.classList.toggle("open");
+  p.setAttribute("aria-hidden", p.classList.contains("open") ? "false" : "true");
+});
+
+/* ── Settings bar ──────────────────────────────────────────── */
+const apiKeyInput = $("api-key");
+const intervalInput = $("interval");
+const settingsHint = $("settings-hint");
+apiKeyInput.value = state.appKey || "";
+intervalInput.value = state.intervalSec;
+$("apply-settings").addEventListener("click", () => {
+  state.appKey = apiKeyInput.value.trim();
+  state.intervalSec = Math.max(10, Math.min(600, parseInt(intervalInput.value, 10) || 30));
+  try { localStorage.setItem("tfl_app_key", state.appKey); } catch (e) {}
+  pageSub.textContent = `Auto-refreshing every ${state.intervalSec} seconds · predicted arrival times and vehicle IDs.`;
+  settingsHint.textContent = state.appKey ? "Key saved — using 500 req/min tier." : "Anonymous mode — 50 req/min.";
+  scheduleNextRefresh(0); // restart cycle immediately
+});
+
+/* ── TfL fetch ─────────────────────────────────────────────── */
+async function fetchArrivals(stop) {
+  const params = new URLSearchParams();
+  if (state.appKey) params.set("app_key", state.appKey);
+  const url = `${TFL_BASE}/StopPoint/${encodeURIComponent(stop.naptanId)}/Arrivals${params.toString() ? "?" + params : ""}`;
+  const resp = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  const allowed = stop.routes.map((r) => r.toUpperCase());
+  return (data || [])
+    .filter((a) => !allowed.length || allowed.includes(String(a.lineName || "").toUpperCase()))
+    .map((a) => ({
+      lineName: cleanStr(a.lineName),
+      destinationName: cleanStr(a.destinationName) || cleanStr(a.towards),
+      towards: cleanStr(a.towards),
+      platformName: cleanStr(a.platformName),
+      vehicleId: cleanStr(a.vehicleId),
+      timeToStation: parseInt(a.timeToStation, 10) || 0,
+      expectedArrival: cleanStr(a.expectedArrival),
+      arrivalMs: parseArrivalMs(a.expectedArrival),
+    }))
+    .sort((a, b) => a.arrivalMs - b.arrivalMs);
+}
+
+function cleanStr(v) {
+  const s = String(v == null ? "" : v).trim();
+  const low = s.toLowerCase();
+  return low === "null" || low === "undefined" ? "" : s;
+}
+
+function parseArrivalMs(iso) {
+  if (!iso) return Date.now();
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? Date.now() : ms;
+}
+
+/* ── Rendering ─────────────────────────────────────────────── */
+function renderSkeletons() {
+  grid.innerHTML = state.stops.map(stopCardShell).join("");
+}
+function stopCardShell(stop) {
+  return `<article class="stop-card">
+    <header class="stop-head">
+      <div class="stop-label">${escapeHtml(stop.label)}</div>
+      <div class="stop-meta">
+        <span class="stop-id">${escapeHtml(stop.naptanId)}</span>
+        ${stop.routes.length ? stop.routes.map((r) => `<span class="route-chip">${escapeHtml(r)}</span>`).join("") : '<span class="route-chip all">All routes</span>'}
+      </div>
+    </header>
+    <div class="skeleton">
+      ${Array.from({length: 3}, () => `<div class="skeleton-row"><span class="skel-badge"></span><span class="skel-block" style="height:14px"></span><span class="skel-min"></span></div>`).join("")}
+    </div>
+  </article>`;
+}
+
+function renderAll() {
+  if (!state.stops.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">No stops configured. Add stops via the URL, e.g.<br><code style="font-family:var(--font-mono);font-size:12px">?stops=490000019C:10,59;490000022F</code><br>See “Help / API key” for the full format.</div>`;
+    return;
+  }
+  grid.innerHTML = state.stops.map((stop) => {
+    const c = state.cache.get(stop.naptanId);
+    let body;
+    if (!c) {
+      body = `<div class="loading"><div class="spinner"></div>Loading…</div>`;
+    } else if (c.error) {
+      body = `<div class="error">${escapeHtml(c.error)}</div>`;
+    } else if (!c.arrivals.length) {
+      body = `<div class="empty">No buses arriving soon${stop.routes.length ? " on the filtered routes" : ""}.</div>`;
+    } else {
+      body = `<ul class="arrivals">${c.arrivals.map(renderArrival).join("")}</ul>`;
+    }
+    return `<article class="stop-card">
+      <header class="stop-head">
+        <div class="stop-label">${escapeHtml(stop.label)}</div>
+        <div class="stop-meta">
+          <span class="stop-id">${escapeHtml(stop.naptanId)}</span>
+          ${stop.routes.length ? stop.routes.map((r) => `<span class="route-chip">${escapeHtml(r)}</span>`).join("") : '<span class="route-chip all">All routes</span>'}
+        </div>
+      </header>
+      ${body}
+    </article>`;
+  }).join("");
+}
+
+function renderArrival(a) {
+  const now = Date.now();
+  const secsLeft = Math.round((a.arrivalMs - now) / 1000);
+  const mins = Math.max(0, Math.round(secsLeft / 60));
+  const due = mins <= 1;
+  const minLabel = due ? "Due" : `${mins}`;
+  const unit = due ? "" : '<span class="unit">min</span>';
+  const clock = a.expectedArrival ? formatClock(a.expectedArrival) : "";
+  const dest = a.destinationName || a.towards || "—";
+  const sub = [
+    a.vehicleId ? `<span class="vid">Veh ${escapeHtml(a.vehicleId)}</span>` : "",
+    a.platformName ? `<span class="plate">Plat ${escapeHtml(a.platformName)}</span>` : "",
+    a.towards && a.towards !== dest ? `<span class="plate">via ${escapeHtml(a.towards)}</span>` : "",
+  ].filter(Boolean).join("");
+  return `<li class="arrival">
+    <span class="route-badge">${escapeHtml(a.lineName || "—")}</span>
+    <span class="arrival-info">
+      <span class="arrival-dest">${escapeHtml(dest)}</span>
+      <span class="arrival-sub">${sub || '<span class="plate">—</span>'}</span>
+    </span>
+    <span class="arrival-time">
+      <span class="min ${due ? "due" : ""}">${minLabel}${unit}</span>
+      ${clock ? `<div class="clock">${escapeHtml(clock)}</div>` : ""}
+    </span>
+  </li>`;
+}
+
+function formatClock(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch { return ""; }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ── Status / countdown ────────────────────────────────────── */
+function setStatus(stateName, label) {
+  statusBadge.setAttribute("data-state", stateName);
+  statusBadge.querySelector(".badge-label").textContent = label;
+}
+function updateStatusMeta() {
+  lastUpdatedEl.textContent = state.lastUpdated || "—";
+  setStatus(state.ok ? "live" : "error", state.ok ? "Live" : "Error");
+}
+
+/* ── Refresh cycle ─────────────────────────────────────────── */
+let nextRefreshAt = 0;
+
+async function refreshOnce() {
+  setStatus("loading", "Refreshing…");
+  const results = await Promise.allSettled(state.stops.map((stop) => fetchArrivals(stop)));
+  let anyOk = false;
+  results.forEach((r, i) => {
+    const stop = state.stops[i];
+    if (r.status === "fulfilled") {
+      anyOk = true;
+      state.cache.set(stop.naptanId, { arrivals: r.value, error: "", fetchedAt: Date.now() });
+    } else {
+      const msg = String(r.reason && r.reason.message || r.reason || "Request failed");
+      const prev = state.cache.get(stop.naptanId);
+      // keep previous data if we have it; surface error otherwise
+      state.cache.set(stop.naptanId, { arrivals: prev ? prev.arrivals : [], error: prev ? "" : "Unable to load — " + msg, fetchedAt: Date.now() });
+    }
+  });
+  state.ok = anyOk;
+  state.lastUpdated = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  updateStatusMeta();
+  renderAll();
+}
+
+function scheduleNextRefresh(delaySec) {
+  nextRefreshAt = Date.now() + delaySec * 1000;
+}
+
+/* 1s ticker: re-render (live countdown) + drive refresh schedule */
+function tick() {
+  // re-render arrivals so minutes count down smoothly
+  if (state.cache.size) renderAll();
+  const remain = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
+  countdownEl.textContent = remain + "s";
+  if (Date.now() >= nextRefreshAt) {
+    refreshOnce().finally(() => scheduleNextRefresh(state.intervalSec));
+  }
+}
+
+/* ── Boot ─────────────────────────────────────────────────── */
+$("refresh-now").addEventListener("click", () => {
+  refreshOnce().finally(() => scheduleNextRefresh(state.intervalSec));
+});
+
+// Stops editor (works without URL params — for Android content:// opens)
+const stopsInput = $("stops-input");
+const stopsHint = $("stops-hint");
+stopsInput.value = serializeStops(state.stops);
+
+function loadStopsFromInput() {
+  const text = stopsInput.value.trim();
+  state.stops = stopsFromString(text);
+  try { localStorage.setItem("tfl_stops", text); } catch (e) {}
+  state.cache.clear();
+  if (!state.stops.length) {
+    renderAll();
+    setStatus("error", "No stops");
+    stopsHint.textContent = "No valid stops — check the format.";
+    return;
+  }
+  stopsHint.textContent = state.stops.length + " stop" + (state.stops.length === 1 ? "" : "s") + " loaded.";
+  renderSkeletons();
+  refreshOnce().finally(() => scheduleNextRefresh(state.intervalSec));
+  if (!state._ticking) { state._ticking = true; setInterval(tick, 1000); }
+}
+
+$("load-stops").addEventListener("click", loadStopsFromInput);
+stopsInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); loadStopsFromInput(); } });
+
+// Save a personalised copy with the stops baked in (reopens with them loaded)
+$("save-file").addEventListener("click", () => {
+  const stopsStr = stopsInput.value.trim().replace(/\+/g, " ");
+  const jsonLit = JSON.stringify(stopsStr).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");  // quoted + escaped + script-safe
+  let html = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+  // Replace the DEFAULT_STOPS assignment (unique token) with the baked value.
+  html = html.replace("DEFAULT_STOPS = PLACEHOLDER", "DEFAULT_STOPS = " + jsonLit);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "bus-dashboard.html";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  stopsHint.textContent = "Saved bus-dashboard.html — open it from your Downloads.";
+});
+
+if (!state.stops.length) {
+  renderAll();
+  setStatus("error", "No stops");
+  stopsHint.textContent = "Add stops above, then click Load stops.";
+} else {
+  renderSkeletons();
+  settingsHint.textContent = state.appKey ? "Key loaded — 500 req/min tier." : "Anonymous mode — 50 req/min.";
+  refreshOnce().finally(() => scheduleNextRefresh(state.intervalSec));
+  state._ticking = true;
+  setInterval(tick, 1000);
+}
+</script>
+</body>
+</html>
