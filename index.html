@@ -471,20 +471,31 @@ async function fetchArrivals(stop) {
   
   const rawList = (data || [])
     .filter((a) => !allowed.length || allowed.includes(String(a.lineName || "").toUpperCase()))
-    .map((a) => ({
-      id: cleanStr(a.id),
-      lineName: cleanStr(a.lineName),
-      destinationName: cleanStr(a.destinationName) || cleanStr(a.towards),
-      towards: cleanStr(a.towards),
-      platformName: cleanStr(a.platformName),
-      vehicleId: cleanStr(a.vehicleId),
-      timeToStation: parseInt(a.timeToStation, 10) || 0,
-      expectedArrival: cleanStr(a.expectedArrival),
-      arrivalMs: parseArrivalMs(a.expectedArrival),
-    }))
+    .map((a) => {
+      let dest = cleanStr(a.destinationName) || cleanStr(a.towards);
+      let towards = cleanStr(a.towards);
+
+      // Remap terminus inbound arrivals to outbound departures for Stanmore
+      if (stop.naptanId === "940GZZLUSTM" || dest.toLowerCase().includes("stanmore")) {
+        dest = "Stratford";
+        if (towards.toLowerCase().includes("stanmore")) towards = "";
+      }
+
+      return {
+        id: cleanStr(a.id),
+        lineName: cleanStr(a.lineName),
+        destinationName: dest,
+        towards: towards,
+        platformName: cleanStr(a.platformName),
+        vehicleId: cleanStr(a.vehicleId),
+        timeToStation: parseInt(a.timeToStation, 10) || 0,
+        expectedArrival: cleanStr(a.expectedArrival),
+        arrivalMs: parseArrivalMs(a.expectedArrival),
+      };
+    })
     .sort((a, b) => a.arrivalMs - b.arrivalMs);
 
-  // Deduplicate multi-platform train predictions by unique Vehicle ID
+  // Deduplicate multi-platform predictions by unique Vehicle ID
   const deduplicated = [];
   const seenVehicles = new Set();
   const seenIds = new Set();
